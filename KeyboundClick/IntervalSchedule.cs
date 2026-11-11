@@ -13,4 +13,5 @@ internal sealed class IntervalSchedule(Random random)
         DueAt = now + LastDelayMs;
     }
     internal bool IsDue(long now) => now >= DueAt;
+    internal void Clear() => DueAt = long.MaxValue;
 }

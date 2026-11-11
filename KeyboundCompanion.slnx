@@ -1,4 +1,6 @@
 <Solution>
-  <Project Path="KeyboundClick/KeyboundClick.csproj" />
+  <Project Path="KeyboundClick/KeyboundClick.csproj">
+    <Platform Project="x64" />
+  </Project>
   <Project Path="KeyboundClick.Tests/KeyboundClick.Tests.csproj" />
 </Solution>

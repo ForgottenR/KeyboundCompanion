@@ -10,5 +10,9 @@
     <Compile Include="../KeyboundClick/AntiIdlePulse.cs" Link="AntiIdlePulse.cs" />
     <Compile Include="../KeyboundClick/AntiIdleSubmit.cs" Link="AntiIdleSubmit.cs" />
     <Compile Include="../KeyboundClick/ConfirmationGate.cs" Link="ConfirmationGate.cs" />
+    <Compile Include="../KeyboundClick/GameSnapshot.cs" Link="GameSnapshot.cs" />
+    <Compile Include="../KeyboundClick/SafetyGate.cs" Link="SafetyGate.cs" />
+    <Compile Include="../KeyboundClick/SubmissionCoordinator.cs" Link="SubmissionCoordinator.cs" />
+    <Compile Include="../KeyboundClick/DiagnosticJournal.cs" Link="DiagnosticJournal.cs" />
   </ItemGroup>
 </Project>

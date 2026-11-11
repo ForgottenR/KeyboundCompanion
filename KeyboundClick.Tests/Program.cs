@@ -1,15 +1,19 @@
+using System.Text.Json;
 using KeyboundClick;
 
 static void Check(bool condition, string message) { if (!condition) throw new Exception(message); }
 var random = new Random(20261028);
-var normal = new Candidate(1, 19586, "普通敌人", "神罗", 0, false);
-var boss = new Candidate(2, 19596, "Boss", "克劳德", 1, true);
-var pot = new Candidate(3, 19592, "魔法罐", "给我圣灵药！", 4, false);
-for (var i = 0; i < 10000; i++) Check(TargetPolicy.Choose([normal, boss, pot], random) == boss, "Boss must always win");
+var normal = new Candidate(1, 19586, "普通敌人", "神罗", 0, false, CandidateRole.Normal, ScreenY: 300);
+var boss = new Candidate(2, 19596, "Boss", "克劳德", 1, true, CandidateRole.Boss, ScreenY: 100);
+var pot = new Candidate(3, 19592, "魔法罐", "给我圣灵药！", 4, false, CandidateRole.MagicPot, ScreenY: 200);
+var barrier = new Candidate(9, 19824, "屏障", "守护", 2, false, CandidateRole.Barrier);
+var casting = normal with { EntityId = 4, CastActionId = 40000, CastProgress = 0.8f };
+Check(TargetPolicy.Choose([normal, boss, pot], random) == pot, "Magic pot must outrank ordinary enemies and the boss");
+Check(TargetPolicy.Choose([normal, boss, pot, casting], random) == casting, "Urgent casts must outrank the magic pot");
+Check(TargetPolicy.Choose([casting, pot, barrier], random) == barrier, "Barrier defense must outrank every combat target");
+var nearer = normal with { EntityId = 5, ScreenY = 500, Word = "更长的词条" };
+Check(TargetPolicy.Choose([normal, nearer], random) == nearer, "Enemies closer to the barrier must outrank distant enemies");
 Check(TargetPolicy.Choose([], random) == null, "Empty input must not produce an action");
-var counts = new Dictionary<uint, int> { [1] = 0, [3] = 0 };
-for (var i = 0; i < 10000; i++) counts[TargetPolicy.Choose([normal, pot], random)!.EntityId]++;
-Check(counts.Values.All(n => n is > 4500 and < 5500), "Random fallback must sample both targets");
 var gate = new ClickGate();
 Check(!gate.Consume(), "No click must mean no submission");
 Check(gate.Request() && !gate.Request(), "Duplicate pending clicks must be coalesced");
@@ -17,7 +21,7 @@ Check(gate.Consume() && !gate.Consume(), "One accepted click must be consumed on
 gate.Request(); gate.Cancel(); Check(!gate.Consume(), "Cancelled clicks must never execute");
 Check(EnemyKinds.IsBoss(19596, 1) && !EnemyKinds.IsBoss(19592, 4), "Boss must not be confused with the magic pot");
 Check(!EnemyKinds.IsEnemy(19824, 2) && !EnemyKinds.IsEnemy(20146, 3), "Non-enemy objects must not be selected");
-foreach (var baseline in new[] {100, 1000, 1100, 1250, 3333, 10000})
+foreach (var baseline in new[] { 100, 1000, 1100, 1250, 3333, 10000 })
 {
     var schedule = new IntervalSchedule(random);
     var unique = new HashSet<int>();
@@ -120,7 +124,7 @@ for (var i = 0; i < 6; i++)
     pulse.Update(20_050 + i * 100, true);
 }
 Check(pulse.Completed == 1 && !pulse.IsBusy && keyboard.Held == 0, "A full pulse must leave every key released");
-Check(keyboard.Events.Where(e => e.Down).Select(e => e.Key).SequenceEqual(new ushort[] {0x7C, 0x7D, 0xA0, 0xA1, 0x25, 0x27}), "Activity pulse must use only the documented six keys, never Enter");
+Check(keyboard.Events.Where(e => e.Down).Select(e => e.Key).SequenceEqual(new ushort[] { 0x7C, 0x7D, 0xA0, 0xA1, 0x25, 0x27 }), "Activity pulse must use only the documented six keys, never Enter");
 pulse.Update(40_549, true);
 Check(keyboard.Events.Count == 12, "Next pulse must be 20 seconds after completion");
 pulse.Update(40_550, true);
@@ -219,7 +223,109 @@ confirmation.TryAcquire(104900, 123, false);
 Check(!confirmation.TryAcquire(105000, 123, true) && !confirmation.TryAcquire(105999, 123, true), "Unavailable buttons reset stable time");
 Check(confirmation.TryAcquire(106000, 123, true), "New popup may be confirmed");
 Check(!confirmation.TryAcquire(107000, 456, true) && confirmation.TryAcquire(108000, 456, true), "Different popup starts a new cycle");
-Console.WriteLine("PASS: targets, shared normal/manual/error cooldown, confirmed error input, duty windows, both activity modes, interruptions, wave gaps, key cleanup and scoped one-shot confirmations.");
+static GameSnapshot TestSnapshot(Candidate[] candidates, uint score = 0, bool allowed = true, int lockSeconds = 0, CastSnapshot[]? haltCasts = null) =>
+    new(2, score, 0, false, allowed, lockSeconds, allowed ? "Ready" : "Locked", "", 1, 0, candidates, haltCasts ?? []);
+
+static void Tick(SubmissionCoordinator coordinator, long now, GameSnapshot snapshot, ISubmissionGateway gateway, bool manual = true, string? safety = null) =>
+    coordinator.Tick(now, snapshot, false, manual, 1000, true, safety, gateway);
+
+var gateway = new FakeGateway();
+var coordinated = new SubmissionCoordinator(new SubmissionCooldown(1000), new IntervalSchedule(random));
+Tick(coordinated, 0, TestSnapshot([normal]), gateway);
+Check(coordinated.Attempts == 1 && coordinated.HasPending && gateway.Words.Count == 1, "A native call must enter the pending-effect state");
+Tick(coordinated, 100, TestSnapshot([normal]), gateway);
+Check(coordinated.Attempts == 1 && coordinated.Effects == 0, "An unchanged snapshot must not be counted as success");
+Tick(coordinated, 100, TestSnapshot([normal with { HealthPercent = 90 }]), gateway);
+Check(coordinated.Effects == 1 && !coordinated.HasPending, "A health decrease must complete the submission loop");
+Tick(coordinated, 1000, TestSnapshot([normal]), gateway);
+Tick(coordinated, 2100, TestSnapshot([normal]), gateway);
+Check(coordinated.Stalls == 1 && coordinated.ConsecutiveStalls == 1, "Matched but unchanged must become a stall, not a success");
+Tick(coordinated, 3000, TestSnapshot([normal]), gateway);
+Tick(coordinated, 4000, TestSnapshot([normal]), gateway);
+Tick(coordinated, 6000, TestSnapshot([normal]), gateway);
+Tick(coordinated, 7000, TestSnapshot([normal]), gateway);
+Check(coordinated.Stalls == 3 && coordinated.IsFaulted && coordinated.Attempts == 4, "Repeated ineffective submissions must trip the safety breaker");
+Tick(coordinated, 8000, TestSnapshot([normal]), gateway);
+Check(coordinated.Attempts == 4 && gateway.Words.Count == 4, "A faulted coordinator must never keep firing submissions");
+
+var unmatchedGateway = new FakeGateway { Result = false };
+var unmatchedCoordinator = new SubmissionCoordinator(new SubmissionCooldown(1000), new IntervalSchedule(random));
+Tick(unmatchedCoordinator, 0, TestSnapshot([normal]), unmatchedGateway);
+Tick(unmatchedCoordinator, 250, TestSnapshot([normal]), unmatchedGateway);
+Check(unmatchedCoordinator.Unmatched == 1 && unmatchedCoordinator.Stalls == 0 && !unmatchedCoordinator.HasPending,
+    "An explicit unmatched result must resolve without being reported as a hit");
+var scoreCoordinator = new SubmissionCoordinator(new SubmissionCooldown(1000), new IntervalSchedule(random));
+var scoreGateway = new FakeGateway();
+Tick(scoreCoordinator, 0, TestSnapshot([normal], 100), scoreGateway);
+Tick(scoreCoordinator, 50, TestSnapshot([normal], 125), scoreGateway);
+Check(scoreCoordinator.Effects == 1, "A score increase must confirm an effect even if health does not change");
+var blockedCoordinator = new SubmissionCoordinator(new SubmissionCooldown(1000), new IntervalSchedule(random));
+Tick(blockedCoordinator, 0, TestSnapshot([normal]), new FakeGateway(), safety: "停止输入");
+Check(blockedCoordinator.Attempts == 0, "The safety gate must have absolute veto over submission");
+var automaticCoordinator = new SubmissionCoordinator(new SubmissionCooldown(1000), new IntervalSchedule(random));
+var automaticGateway = new FakeGateway();
+automaticCoordinator.Tick(0, TestSnapshot([normal]), true, false, 1000, true, null, automaticGateway);
+Check(automaticCoordinator.Attempts == 0, "Automatic mode must arm its initial delay");
+automaticCoordinator.Tick(1300, TestSnapshot([normal]), true, false, 1000, true, null, automaticGateway);
+Check(automaticCoordinator.Attempts == 1, "Automatic mode must fire once the initial delay expires");
+
+var safetyGate = new SafetyGate();
+var halt = new CastSnapshot(1, 49529, "停止输入技能", 4, 5);
+Check(safetyGate.Evaluate(0, TestSnapshot([normal], haltCasts: [halt])) != null, "A landing halt cast must block input");
+Check(safetyGate.Evaluate(100, TestSnapshot([normal])) != null, "The post-cast hold must start after the cast disappears");
+Check(safetyGate.Evaluate(3599, TestSnapshot([normal])) != null, "The post-cast hold must not end early");
+Check(safetyGate.Evaluate(3600, TestSnapshot([normal])) == null, "The post-cast hold must expire at the configured boundary");
+var earlySafety = new SafetyGate();
+Check(earlySafety.Evaluate(0, TestSnapshot([normal], haltCasts: [halt with { CurrentSeconds = 1 }])) == null,
+    "Early cast progress must still permit useful attacks");
+Check(earlySafety.Evaluate(100, TestSnapshot([normal])) == null, "An interrupted early cast must not cause a post-cast hold");
+Check(new SafetyGate().Evaluate(0, TestSnapshot([normal], lockSeconds: 2)) != null, "The game's own input lock must always win");
+var customSafety = new SafetyGate();
+var customHalt = halt with { CurrentSeconds = 3.2f };
+Check(customSafety.Evaluate(0, TestSnapshot([normal], haltCasts: [customHalt]), 1000, 1000) == null,
+    "A shorter pre-cast threshold must not block while more time remains");
+Check(customSafety.Evaluate(100, TestSnapshot([normal], haltCasts: [customHalt with { CurrentSeconds = 4.3f }]), 1000, 1000) != null,
+    "A shorter pre-cast threshold must block when its remaining-time boundary is crossed");
+Check(customSafety.Evaluate(200, TestSnapshot([normal]), 1000, 1000) != null, "A custom post-cast hold must start after the cast disappears");
+Check(customSafety.Evaluate(1100, TestSnapshot([normal]), 1000, 5000) != null, "Extending the post-cast hold must apply to the active halt window");
+Check(customSafety.Evaluate(1100, TestSnapshot([normal]), 1000, 1000) != null, "The custom post-cast hold must remain before its boundary");
+Check(customSafety.Evaluate(1200, TestSnapshot([normal]), 1000, 1000) == null, "Shortening the active hold must allow resuming at its new boundary");
+Check(customSafety.Evaluate(1200, TestSnapshot([normal], lockSeconds: 2), 1000, 1000) != null, "Input lock must still win after a custom hold ends");
+
+var disappearanceCoordinator = new SubmissionCoordinator(new SubmissionCooldown(1000), new IntervalSchedule(random));
+var disappearanceGateway = new FakeGateway();
+Tick(disappearanceCoordinator, 0, TestSnapshot([normal]), disappearanceGateway);
+Tick(disappearanceCoordinator, 50, TestSnapshot([]), disappearanceGateway);
+Check(disappearanceCoordinator.Effects == 0 && disappearanceCoordinator.HasPending, "A single missing snapshot must not confirm success");
+Tick(disappearanceCoordinator, 150, TestSnapshot([]), disappearanceGateway);
+Check(disappearanceCoordinator.Effects == 1 && !disappearanceCoordinator.HasPending, "A sustained disappearance must resolve the pending submission");
+
+var journalTestRoot = Path.Combine(AppContext.BaseDirectory, "journal-test");
+if (Directory.Exists(journalTestRoot)) Directory.Delete(journalTestRoot, true);
+var journal = new DiagnosticJournal(journalTestRoot);
+journal.Record("self-test", new { Value = 42, Text = "词条" });
+var journalPath = journal.FilePath;
+journal.Dispose();
+Check(journal.Error == null && File.Exists(journalPath), "The diagnostic journal must create and close its JSONL file cleanly");
+using var journalJson = JsonDocument.Parse(File.ReadAllText(journalPath));
+var journalData = journalJson.RootElement.GetProperty("Data");
+Check(journalJson.RootElement.GetProperty("Kind").GetString() == "self-test" &&
+      journalData.GetProperty("Value").GetInt32() == 42 && journalData.GetProperty("Text").GetString() == "词条",
+    "The diagnostic journal must persist structured event data");
+Directory.Delete(journalTestRoot, true);
+
+Console.WriteLine("PASS: high-score targets, closed-loop effects, stall breaker, safety gates, shared cooldowns, activity cleanup, confirmations and JSONL diagnostics.");
+
+sealed class FakeGateway : ISubmissionGateway
+{
+    public bool Result { get; set; } = true;
+    public List<string> Words { get; } = [];
+    public bool Submit(string word)
+    {
+        Words.Add(word);
+        return Result;
+    }
+}
 
 sealed class FakeKeyboard : IActivityKeyboard
 {

@@ -64,7 +64,7 @@ public sealed unsafe partial class Plugin
     }
 
     private static string? ButtonText(AtkComponentButton* button) =>
-        button == null || button->ButtonTextNode == null ? null : VisibleText(button->ButtonTextNode->NodeText);
+        button == null || button->ButtonTextNode == null ? null : GameStateReader.VisibleText(button->ButtonTextNode->NodeText);
 
     private static AtkEvent* FindClickEvent(AtkUnitBase* addon, AtkComponentButton* button)
     {

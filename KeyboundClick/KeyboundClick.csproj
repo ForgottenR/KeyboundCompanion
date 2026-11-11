@@ -1,22 +1,18 @@
-<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Dalamud.NET.Sdk/15.0.0">
   <PropertyGroup>
-    <TargetFramework>net10.0-windows</TargetFramework>
-    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-    <Nullable>enable</Nullable>
+    <Version>0.2.1</Version>
+    <Author>ForgottenR</Author>
+    <Name>键影随行</Name>
+    <Punchline>一键随行，键影从容。</Punchline>
+    <Description>ForgottenR 的魔光键影高分助手：优先屏障、紧急读条与魔法罐，通过游戏状态确认提交效果，支持安全停手、停顿熔断、自动诊断及出发与结算确认。</Description>
+    <RepoUrl>https://github.com/ForgottenR/KeyboundCompanion</RepoUrl>
+    <Tags>魔光键影;KeyboundBrawler</Tags>
     <ImplicitUsings>enable</ImplicitUsings>
-    <Version>0.1.8</Version>
     <PathMap>$(MSBuildProjectDirectory)=/_/KeyboundClick</PathMap>
-    <PlatformTarget>x64</PlatformTarget>
-    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
-    <DalamudLibPath Condition="'$(DalamudLibPath)' == ''">$(APPDATA)/XIVLauncherCN/addon/Hooks/dev</DalamudLibPath>
+    <DalamudLibPath Condition="'$(DALAMUD_HOME)' == ''">$(APPDATA)/XIVLauncherCN/addon/Hooks/dev/</DalamudLibPath>
+    <AssemblySearchPaths Condition="'$(DALAMUD_HOME)' == ''">$(AssemblySearchPaths);$(DalamudLibPath)</AssemblySearchPaths>
   </PropertyGroup>
   <ItemGroup>
-    <Reference Include="Dalamud"><HintPath>$(DalamudLibPath)/Dalamud.dll</HintPath><Private>false</Private></Reference>
-    <Reference Include="Dalamud.Bindings.ImGui"><HintPath>$(DalamudLibPath)/Dalamud.Bindings.ImGui.dll</HintPath><Private>false</Private></Reference>
-    <Reference Include="FFXIVClientStructs"><HintPath>$(DalamudLibPath)/FFXIVClientStructs.dll</HintPath><Private>false</Private></Reference>
-    <Reference Include="InteropGenerator.Runtime"><HintPath>$(DalamudLibPath)/InteropGenerator.Runtime.dll</HintPath><Private>false</Private></Reference>
-    <Reference Include="Lumina"><HintPath>$(DalamudLibPath)/Lumina.dll</HintPath><Private>false</Private></Reference>
-    <Reference Include="Lumina.Excel"><HintPath>$(DalamudLibPath)/Lumina.Excel.dll</HintPath><Private>false</Private></Reference>
-    <None Update="KeyboundClick.json" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="THIRD-PARTY-NOTICES.txt" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

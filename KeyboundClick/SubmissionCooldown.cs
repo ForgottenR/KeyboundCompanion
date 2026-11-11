@@ -1,6 +1,6 @@
 namespace KeyboundClick;
 
-// One shared gate for all submission sources. Timestamp units are Stopwatch ticks.
+// One shared gate for all submission sources. Production timestamps use Environment.TickCount64 milliseconds.
 internal sealed class SubmissionCooldown(long ticksPerSecond)
 {
     private long nextAllowedAt;
